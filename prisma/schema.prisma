@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Seeded reference data. Deliberately has no soft delete: a `deleted_at` column
+// plus an unconditional unique slug means a removed category burns its slug forever,
+// and Postgres partial unique indexes are not expressible in the Prisma schema.
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  announcements AnnouncementCategory[]
+
+  @@map("categories")
+}
+
+model Announcement {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String
+  content     String
+  publishedAt DateTime  @map("published_at") @db.Timestamptz(3)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  categories    AnnouncementCategory[]
+  notifications Notification[]
+
+  // The list query filters deleted_at is null and orders by updated_at desc,
+  // so the filter column has to lead for the sort to be index-served.
+  @@index([deletedAt, updatedAt], map: "announcements_deleted_at_updated_at_idx")
+  @@index([publishedAt], map: "announcements_published_at_idx")
+  @@map("announcements")
+}
+
+model AnnouncementCategory {
+  announcementId String @map("announcement_id") @db.Uuid
+  categoryId     String @map("category_id") @db.Uuid
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  category     Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, categoryId])
+  @@index([categoryId], map: "announcement_categories_category_id_idx")
+  @@map("announcement_categories")
+}
+
+enum NotificationKind {
+  created
+  upcoming
+  published
+
+  @@map("notification_kind")
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  announcementId String           @map("announcement_id") @db.Uuid
+  kind           NotificationKind
+  title          String
+  publishedAt    DateTime         @map("published_at") @db.Timestamptz(3)
+  readAt         DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, kind], map: "notifications_announcement_kind_unique_idx")
+  @@index([createdAt], map: "notifications_created_at_idx")
+  @@index([readAt], map: "notifications_read_at_idx")
+  @@map("notifications")
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  eventType     String    @map("event_type")
+  payload       Json
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  failedAt      DateTime? @map("failed_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  processedAt   DateTime? @map("processed_at") @db.Timestamptz(3)
+
+  // Dispatch reads `where processed_at is null and failed_at is null order by created_at`.
+  @@index([processedAt, failedAt, createdAt], map: "outbox_events_dispatch_idx")
+  @@map("outbox_events")
+}
