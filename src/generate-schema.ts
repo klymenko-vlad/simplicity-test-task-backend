@@ -5,7 +5,7 @@ import { NestFactory } from '@nestjs/core';
 import { GraphQLSchemaBuilderModule, GraphQLSchemaFactory } from '@nestjs/graphql';
 import { lexicographicSortSchema, printSchema } from 'graphql';
 
-import { AnnouncementsResolver } from './modules/announcements/announcements.resolver';
+import { AnnouncementsResolver } from './modules/announcements/api/announcements.resolver';
 import { NotificationsResolver } from './modules/notifications/notifications.resolver';
 
 const SCHEMA_PATH = resolve(process.cwd(), 'src/schema.gql');

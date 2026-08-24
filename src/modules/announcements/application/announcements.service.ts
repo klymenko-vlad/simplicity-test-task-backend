@@ -1,21 +1,22 @@
 import { Injectable } from '@nestjs/common';
 
-import { PaginationInput } from '../../common/dto/pagination.types';
-import { EntityNotFoundError, InvalidInputError } from '../../common/errors/domain.error';
-import { parseUsDateTime } from '../../common/validators/us-datetime';
-import { NotificationsService } from '../notifications/notifications.service';
-
-import { AnnouncementRemindersScheduler } from './announcement-reminders.scheduler';
-import { AnnouncementPageType, AnnouncementType } from './announcement.entity';
+import { PaginationInput } from '../../../common/dto/pagination.types';
+import { EntityNotFoundError, InvalidInputError } from '../../../common/errors/domain.error';
+import { parseUsDateTime } from '../../../common/validators/us-datetime';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { AnnouncementPageType, AnnouncementType } from '../api/announcement.entity';
+import { CategoryType } from '../api/category.entity';
+import { AnnouncementFilterInput } from '../api/dto/announcement-filter.input';
+import { CreateAnnouncementInput } from '../api/dto/create-announcement.input';
+import { UpdateAnnouncementInput } from '../api/dto/update-announcement.input';
 import {
   AnnouncementsRepository,
   type AnnouncementData,
   type AnnouncementSortField,
-} from './announcements.repository';
-import { CategoriesRepository } from './categories.repository';
-import { CategoryType } from './category.entity';
-import { CreateAnnouncementInput } from './dto/create-announcement.input';
-import { UpdateAnnouncementInput } from './dto/update-announcement.input';
+} from '../persistence/announcements.repository';
+import { CategoriesRepository } from '../persistence/categories.repository';
+
+import { AnnouncementRemindersScheduler } from './announcement-reminders.scheduler';
 
 const PUBLISHED_AT_PAST_TOLERANCE_MS = 60_000;
 const PUBLISHED_AT_MAX_FUTURE_YEARS = 5;
@@ -38,13 +39,18 @@ export class AnnouncementsService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async list(pagination: PaginationInput): Promise<AnnouncementPageType> {
-    const { items, total } = await this.announcementsRepository.findPageWithCategories(
-      pagination.limit,
-      pagination.offset,
-      this.sortField(pagination.sortBy),
-      pagination.order,
-    );
+  async list(
+    pagination: PaginationInput,
+    filter?: AnnouncementFilterInput,
+  ): Promise<AnnouncementPageType> {
+    const { items, total } = await this.announcementsRepository.findPageWithCategories({
+      limit: pagination.limit,
+      offset: pagination.offset,
+      sortBy: this.sortField(pagination.sortBy),
+      order: pagination.order,
+      categoryIds: filter?.categoryIds,
+      search: filter?.search,
+    });
 
     const page = new AnnouncementPageType();
     page.items = items.map((item) => AnnouncementType.fromEntity(item));
@@ -60,10 +66,10 @@ export class AnnouncementsService {
     return AnnouncementType.fromEntity(found);
   }
 
-  listCategories(): Promise<CategoryType[]> {
-    return this.categoriesRepository
-      .findAllOrdered()
-      .then((categories) => categories.map((category) => CategoryType.fromEntity(category)));
+  async listCategories(): Promise<CategoryType[]> {
+    const categories = await this.categoriesRepository.findAllOrdered();
+
+    return categories.map((category) => CategoryType.fromEntity(category));
   }
 
   async create(input: CreateAnnouncementInput): Promise<AnnouncementType> {

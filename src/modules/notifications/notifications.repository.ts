@@ -41,23 +41,23 @@ export class NotificationsRepository {
     });
   }
 
-  markRead(ids?: string[]): Promise<number> {
-    if (ids?.length === 0) return Promise.resolve(0);
+  async markRead(ids?: string[]): Promise<number> {
+    if (ids?.length === 0) return 0;
 
-    return this.txHost
-      .client()
-      .notification.updateMany({
-        where: { readAt: null, ...(ids ? { id: { in: ids } } : {}) },
-        data: { readAt: new Date() },
-      })
-      .then((result) => result.count);
+    const { count } = await this.txHost.client().notification.updateMany({
+      where: { readAt: null, ...(ids ? { id: { in: ids } } : {}) },
+      data: { readAt: new Date() },
+    });
+
+    return count;
   }
 
-  deleteForAnnouncement(announcementId: string, tx?: Transaction): Promise<number> {
-    return this.txHost
+  async deleteForAnnouncement(announcementId: string, tx?: Transaction): Promise<number> {
+    const { count } = await this.txHost
       .client(tx)
-      .notification.deleteMany({ where: { announcementId } })
-      .then((result) => result.count);
+      .notification.deleteMany({ where: { announcementId } });
+
+    return count;
   }
 
   createOutboxEvent(notification: Notification, tx: Transaction): Promise<unknown> {

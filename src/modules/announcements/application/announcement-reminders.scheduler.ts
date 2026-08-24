@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
-import type { NotificationJobName } from '../../queue/jobs/notification.jobs';
-import { QueueProducer } from '../../queue/queue.producer';
+import type { NotificationJobName } from '../../../queue/jobs/notification.jobs';
+import { QueueProducer } from '../../../queue/queue.producer';
 
 export const UPCOMING_LEAD_MS = 30 * 60 * 1000;
 

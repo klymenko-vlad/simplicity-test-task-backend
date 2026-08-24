@@ -1,13 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { Announcement, Prisma } from '@prisma/client';
 
-import type { Database, Transaction } from '../../database/database.tokens';
-import { writeOutboxEvent } from '../../database/outbox';
-import { BaseRepository } from '../../database/repository/base.repository';
-import type { Delegate } from '../../database/repository/repository.types';
-import { TransactionHost } from '../../database/transaction.host';
-
-import type { AnnouncementWithCategories } from './announcement.entity';
+import type { Database, Transaction } from '../../../database/database.tokens';
+import { writeOutboxEvent } from '../../../database/outbox';
+import { BaseRepository } from '../../../database/repository/base.repository';
+import type { Delegate } from '../../../database/repository/repository.types';
+import { TransactionHost } from '../../../database/transaction.host';
+import type { AnnouncementWithCategories } from '../api/announcement.entity';
 
 const CATEGORIES_INCLUDE = { categories: { include: { category: true } } } as const;
 
@@ -17,6 +16,42 @@ export interface AnnouncementData {
   title: string;
   content: string;
   publishedAt: Date;
+}
+
+export interface AnnouncementPageQuery {
+  limit: number;
+  offset: number;
+  sortBy: AnnouncementSortField;
+  order: Prisma.SortOrder;
+  categoryIds?: string[];
+  search?: string;
+}
+
+// `contains` interpolates the term straight into a LIKE pattern, so an unescaped
+// `%` or `_` typed by a user would widen the match instead of being searched for.
+function escapeLikePattern(term: string): string {
+  return term.replaceAll(/[\\%_]/g, String.raw`\$&`);
+}
+
+function buildWhere({
+  categoryIds,
+  search,
+}: AnnouncementPageQuery): Prisma.AnnouncementWhereInput {
+  const where: Prisma.AnnouncementWhereInput = { deletedAt: null };
+
+  if (categoryIds && categoryIds.length > 0) {
+    where.categories = { some: { categoryId: { in: categoryIds } } };
+  }
+
+  if (search) {
+    const contains = escapeLikePattern(search);
+    where.OR = [
+      { title: { contains, mode: 'insensitive' } },
+      { content: { contains, mode: 'insensitive' } },
+    ];
+  }
+
+  return where;
 }
 
 @Injectable()
@@ -44,22 +79,19 @@ export class AnnouncementsRepository extends BaseRepository<Announcement> {
   }
 
   async findPageWithCategories(
-    limit: number,
-    offset: number,
-    sortBy: AnnouncementSortField,
-    order: Prisma.SortOrder,
+    query: AnnouncementPageQuery,
     tx?: Transaction,
   ): Promise<{ items: AnnouncementWithCategories[]; total: number }> {
     const client = this.reader(tx);
-    const where = { deletedAt: null };
+    const where = buildWhere(query);
 
     const [items, total] = await Promise.all([
       client.announcement.findMany({
         where,
         include: CATEGORIES_INCLUDE,
-        orderBy: { [sortBy]: order },
-        take: limit,
-        skip: offset,
+        orderBy: { [query.sortBy]: query.order },
+        take: query.limit,
+        skip: query.offset,
       }),
       client.announcement.count({ where }),
     ]);

@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { createTestHarness, type TestHarness } from '../setup/app-harness';
+import {
+  createTestHarness,
+  type GraphQLResponse,
+  type TestHarness,
+} from '../setup/app-harness';
 
 const CREATE = `
   mutation Create($input: CreateAnnouncementInput!) {
@@ -25,8 +29,8 @@ const UPDATE = `
 const DELETE = `mutation Delete($id: ID!) { deleteAnnouncement(id: $id) }`;
 
 const LIST = `
-  query List($pagination: PaginationInput) {
-    announcements(pagination: $pagination) { total items { id title } }
+  query List($pagination: PaginationInput, $filter: AnnouncementFilterInput) {
+    announcements(pagination: $pagination, filter: $filter) { total items { id title } }
   }
 `;
 
@@ -245,5 +249,115 @@ describe('Announcements (e2e)', () => {
     const list = await harness.graphql(LIST, { pagination: { sortBy: 'password' } });
 
     expect(list.errors?.[0]?.extensions?.code).toBe('BAD_USER_INPUT');
+  });
+
+  describe('filtering', () => {
+    async function seedForFiltering(): Promise<{ roads: string; parks: string }> {
+      const roads = await seedCategory();
+      const parks = await seedCategory();
+
+      const rows = [
+        { title: 'Road closure downtown', content: 'Detours are in place.', ids: [roads] },
+        { title: 'Park cleanup day', content: 'Volunteers welcome downtown.', ids: [parks] },
+        {
+          title: 'Winter service plan',
+          content: 'Snow ploughs are ready.',
+          ids: [roads, parks],
+        },
+      ];
+
+      for (const [index, row] of rows.entries()) {
+        const created = await harness.graphql(CREATE, {
+          input: {
+            title: row.title,
+            content: row.content,
+            publishedAt: inDays(index + 1),
+            categoryIds: row.ids,
+          },
+        });
+        expect(created.errors).toBeUndefined();
+      }
+
+      return { roads, parks };
+    }
+
+    function titles(result: GraphQLResponse): string[] {
+      return (result.data?.announcements as { items: { title: string }[] }).items
+        .map((item) => item.title)
+        .sort();
+    }
+
+    it('returns only announcements in the requested category', async () => {
+      const { parks } = await seedForFiltering();
+
+      const list = await harness.graphql(LIST, { filter: { categoryIds: [parks] } });
+
+      expect(list.errors).toBeUndefined();
+      expect((list.data?.announcements as { total: number }).total).toBe(2);
+      expect(titles(list)).toEqual(['Park cleanup day', 'Winter service plan']);
+    });
+
+    it('matches any of several categories rather than requiring all of them', async () => {
+      const { roads, parks } = await seedForFiltering();
+
+      const list = await harness.graphql(LIST, {
+        filter: { categoryIds: [roads, parks] },
+      });
+
+      expect((list.data?.announcements as { total: number }).total).toBe(3);
+    });
+
+    it('searches title and content case-insensitively', async () => {
+      await seedForFiltering();
+
+      const list = await harness.graphql(LIST, { filter: { search: 'DOWNTOWN' } });
+
+      expect(titles(list)).toEqual(['Park cleanup day', 'Road closure downtown']);
+    });
+
+    it('combines search and category filters', async () => {
+      const { roads } = await seedForFiltering();
+
+      const list = await harness.graphql(LIST, {
+        filter: { categoryIds: [roads], search: 'downtown' },
+      });
+
+      expect(titles(list)).toEqual(['Road closure downtown']);
+    });
+
+    it('treats LIKE wildcards in the search term as literal characters', async () => {
+      await seedForFiltering();
+
+      const list = await harness.graphql(LIST, { filter: { search: '%' } });
+
+      expect((list.data?.announcements as { total: number }).total).toBe(0);
+    });
+
+    it('ignores a blank search term', async () => {
+      await seedForFiltering();
+
+      const list = await harness.graphql(LIST, { filter: { search: '   ' } });
+
+      expect((list.data?.announcements as { total: number }).total).toBe(3);
+    });
+
+    it('never returns soft-deleted announcements through a filter', async () => {
+      const { roads } = await seedForFiltering();
+      const all = await harness.graphql(LIST, { filter: { categoryIds: [roads] } });
+      const id = (all.data?.announcements as { items: { id: string }[] }).items[0]!.id;
+
+      await harness.graphql(DELETE, { id });
+
+      const list = await harness.graphql(LIST, { filter: { categoryIds: [roads] } });
+      expect((list.data?.announcements as { total: number }).total).toBe(1);
+    });
+
+    it('rejects a malformed category id', async () => {
+      const list = await harness.graphql(LIST, {
+        filter: { categoryIds: ['not-a-uuid'] },
+      });
+
+      expect(list.errors?.[0]?.extensions?.code).toBe('BAD_USER_INPUT');
+    });
   });
 });

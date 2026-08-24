@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
 }
 
 // Seeded reference data. Deliberately has no soft delete: a `deleted_at` column
@@ -38,6 +40,9 @@ model Announcement {
   // so the filter column has to lead for the sort to be index-served.
   @@index([deletedAt, updatedAt], map: "announcements_deleted_at_updated_at_idx")
   @@index([publishedAt], map: "announcements_published_at_idx")
+  // Search is `ILIKE '%term%'` over title/content, which only a trigram index can serve.
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "announcements_title_trgm_idx", type: Gin)
+  @@index([content(ops: raw("gin_trgm_ops"))], map: "announcements_content_trgm_idx", type: Gin)
   @@map("announcements")
 }
 

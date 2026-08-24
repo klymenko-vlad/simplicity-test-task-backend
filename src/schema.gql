@@ -24,6 +24,11 @@ enum AnnouncementChangedEventType {
   updated
 }
 
+input AnnouncementFilterInput {
+  categoryIds: [ID!]
+  search: String
+}
+
 type AnnouncementPage {
   items: [Announcement!]!
   total: Float!
@@ -88,7 +93,7 @@ type Query {
   announcement(id: ID!): Announcement!
 
   """Announcements page, newest update first"""
-  announcements(pagination: PaginationInput): AnnouncementPage!
+  announcements(filter: AnnouncementFilterInput, pagination: PaginationInput): AnnouncementPage!
   categories: [Category!]!
 
   """Recent notifications, newest first"""

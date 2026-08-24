@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { QueueProducer } from '../../queue/queue.producer';
+import type { QueueProducer } from '../../../queue/queue.producer';
 
 import {
   AnnouncementRemindersScheduler,

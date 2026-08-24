@@ -10,7 +10,7 @@ import {
   MinLength,
 } from 'class-validator';
 
-import { IsUsDateTime } from '../../../common/validators/us-datetime';
+import { IsUsDateTime } from '../../../../common/validators/us-datetime';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;

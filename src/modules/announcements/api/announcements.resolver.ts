@@ -1,13 +1,14 @@
 import { ParseUUIDPipe } from '@nestjs/common';
 import { Args, Context, ID, Mutation, Query, Resolver, Subscription } from '@nestjs/graphql';
 
-import { PaginationInput } from '../../common/dto/pagination.types';
-import { ANNOUNCEMENT_CHANGED_TOPIC } from '../../common/pubsub/pubsub.tokens';
+import { PaginationInput } from '../../../common/dto/pagination.types';
+import { ANNOUNCEMENT_CHANGED_TOPIC } from '../../../common/pubsub/pubsub.tokens';
+import { AnnouncementsService } from '../application/announcements.service';
 
 import { AnnouncementChangedPayload } from './announcement-changed.type';
 import { AnnouncementPageType, AnnouncementType } from './announcement.entity';
-import { AnnouncementsService } from './announcements.service';
 import { CategoryType } from './category.entity';
+import { AnnouncementFilterInput } from './dto/announcement-filter.input';
 import { CreateAnnouncementInput } from './dto/create-announcement.input';
 import { UpdateAnnouncementInput } from './dto/update-announcement.input';
 
@@ -26,8 +27,10 @@ export class AnnouncementsResolver {
   announcements(
     @Args('pagination', { nullable: true, type: () => PaginationInput })
     pagination?: PaginationInput,
+    @Args('filter', { nullable: true, type: () => AnnouncementFilterInput })
+    filter?: AnnouncementFilterInput,
   ): Promise<AnnouncementPageType> {
-    return this.announcementsService.list(pagination ?? new PaginationInput());
+    return this.announcementsService.list(pagination ?? new PaginationInput(), filter);
   }
 
   @Query(() => AnnouncementType)

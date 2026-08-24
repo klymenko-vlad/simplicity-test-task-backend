@@ -2,11 +2,11 @@ import { Module } from '@nestjs/common';
 
 import { NotificationsModule } from '../notifications/notifications.module';
 
-import { AnnouncementRemindersScheduler } from './announcement-reminders.scheduler';
-import { AnnouncementsRepository } from './announcements.repository';
-import { AnnouncementsResolver } from './announcements.resolver';
-import { AnnouncementsService } from './announcements.service';
-import { CategoriesRepository } from './categories.repository';
+import { AnnouncementsResolver } from './api/announcements.resolver';
+import { AnnouncementRemindersScheduler } from './application/announcement-reminders.scheduler';
+import { AnnouncementsService } from './application/announcements.service';
+import { AnnouncementsRepository } from './persistence/announcements.repository';
+import { CategoriesRepository } from './persistence/categories.repository';
 
 @Module({
   imports: [NotificationsModule],
@@ -17,6 +17,6 @@ import { CategoriesRepository } from './categories.repository';
     AnnouncementsResolver,
     AnnouncementRemindersScheduler,
   ],
-  exports: [AnnouncementsService, AnnouncementsRepository, CategoriesRepository],
+  exports: [AnnouncementsRepository],
 })
 export class AnnouncementsModule {}

@@ -2,7 +2,7 @@ import { Processor } from '@nestjs/bullmq';
 import { NotificationKind } from '@prisma/client';
 import { PinoLogger } from 'nestjs-pino';
 
-import { AnnouncementsRepository } from '../../modules/announcements/announcements.repository';
+import { AnnouncementsRepository } from '../../modules/announcements/persistence/announcements.repository';
 import { NotificationsService } from '../../modules/notifications/notifications.service';
 import { BaseProcessor } from '../base.processor';
 import {

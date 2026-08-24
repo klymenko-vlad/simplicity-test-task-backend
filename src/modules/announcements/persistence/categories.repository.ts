@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { Category } from '@prisma/client';
 
-import type { Transaction } from '../../database/database.tokens';
-import { TransactionHost } from '../../database/transaction.host';
+import type { Transaction } from '../../../database/database.tokens';
+import { TransactionHost } from '../../../database/transaction.host';
 
 @Injectable()
 export class CategoriesRepository {
