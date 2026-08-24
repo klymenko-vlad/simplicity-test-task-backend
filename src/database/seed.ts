@@ -31,18 +31,20 @@ async function main(): Promise<void> {
 
   try {
     const categories = await Promise.all(
-      CATEGORIES.map((name) =>
-        prisma.category.upsert({
-          where: { slug: slugify(name) },
-          update: {},
-          create: { name, slug: slugify(name) },
-        }),
-      ),
+      CATEGORIES.map((name) => {
+        const slug = slugify(name);
+
+        return prisma.category.upsert({ where: { slug }, update: {}, create: { name, slug } });
+      }),
     );
 
     console.log(`seeded ${categories.length} categor${categories.length === 1 ? 'y' : 'ies'}`);
 
-    const existingAnnouncements = await prisma.announcement.count();
+    // Soft-deleted rows must not count, or a database whose announcements were all
+    // deleted can never be re-seeded with the sample.
+    const existingAnnouncements = await prisma.announcement.count({
+      where: { deletedAt: null },
+    });
 
     if (existingAnnouncements === 0) {
       const cityCategory = categories.find((category) => category.slug === 'city');
