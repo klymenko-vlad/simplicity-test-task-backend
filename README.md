@@ -40,7 +40,7 @@ GraphiQL is available at `/graphql` in development (`GRAPHIQL_ENABLED=true`).
 | `pnpm typecheck`                  | `tsc --noEmit`                                                           |
 | `pnpm test` / `pnpm test:cov`     | Unit tests                                                               |
 | `pnpm test:e2e`                   | e2e tests (spins up Postgres/Redis via Testcontainers — requires Docker) |
-| `pnpm graphql:generate`           | Regenerate `src/schema.gql` from the resolvers                           |
+| `pnpm graphql:generate`           | Regenerate `src/schema.gql` from resolver metadata (no services needed)  |
 | `pnpm graphql:check`              | Regenerate and fail if `src/schema.gql` is stale                         |
 | `pnpm db:generate`                | Generate a Prisma Client from the schema                                 |
 | `pnpm db:migrate`                 | Apply migrations                                                         |

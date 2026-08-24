@@ -24,7 +24,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "graphql:check": "pnpm graphql:generate && git diff --exit-code -- src/schema.gql",
-    "graphql:generate": "nest build -p tsconfig.build.json && DATABASE_URL=${DATABASE_URL:-postgres://schema:schema@localhost:5432/schema} NODE_ENV=${NODE_ENV:-test} LOG_LEVEL=silent node dist/generate-schema.js",
+    "graphql:generate": "nest build -p tsconfig.build.json && node dist/generate-schema.js",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "postinstall": "prisma generate",
