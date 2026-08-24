@@ -1,120 +1,286 @@
-# backend
+# Simplicity Fullstack Task — Backend
 
-NestJS backend on Fastify with a GraphQL API (Mercurius, code-first schema).
+NestJS backend for managing city announcements. The application exposes a GraphQL API for
+announcement CRUD, categories, and real-time in-app notifications.
 
-## Stack
+## Features
 
-- NestJS 11 on Fastify
-- GraphQL via `@nestjs/graphql` + `@nestjs/mercurius`, code-first — the schema is generated to
-  `src/schema.gql` and committed, the GraphQL analogue of an OpenAPI document
-- Prisma ORM + Postgres
-- Redis: cache, distributed lock, rate-limit storage
-- BullMQ background jobs, split into API/worker roles via `ROLE`
-- `nestjs-pino` logging, `@nestjs/terminus` health checks
-- `@nestjs/throttler` with Redis storage, split budgets for credential mutations vs. everything
-  else
-- `@nestjs/config` + `zod` env validation
-- `argon2` password hashing, JWT access/refresh tokens with rotation and reuse detection
-- Vitest (unit + e2e projects), Testcontainers for the e2e Postgres/Redis instances
+- Create, read, update, and soft-delete announcements
+- Assign one or more seeded categories to an announcement
+- Paginated and sortable announcement list
+- Live GraphQL subscriptions for announcement changes
+- Immediate, upcoming, and published in-app notifications
+- PostgreSQL persistence through Prisma
+- Redis-backed subscriptions, rate limiting, and distributed locks
+- BullMQ jobs for scheduled notifications
+- Liveness, readiness, and full health endpoints
 
-## Getting started
+> **Assignment gap:** category assignment is implemented, but server-side filtering by category
+> and text search across an announcement's title and content are not currently exposed by the
+> GraphQL schema. The `announcements` query currently supports pagination and sorting.
+
+## Technology
+
+- Node.js 22 and TypeScript
+- NestJS 11 with Fastify
+- GraphQL with Mercurius
+- Prisma and PostgreSQL
+- Redis and BullMQ
+- Vitest and Testcontainers
+
+## Requirements
+
+- Node.js 22 or newer
+- pnpm 10 or newer
+- Docker with Docker Compose
+
+## Running locally
 
 ```bash
 pnpm install
 cp .env.example .env
-pnpm docker:up          # Postgres + Redis
+pnpm docker:up
 pnpm db:migrate
-pnpm db:seed             # optional: admin@example.local / ada@example.local
+pnpm db:seed
 pnpm start:dev
 ```
 
-GraphiQL is available at `/graphql` in development (`GRAPHIQL_ENABLED=true`).
+The seed command creates the available categories and one sample announcement. It is safe to run
+more than once in a development environment.
 
-## Scripts
+With the default `.env.example` configuration, the backend runs at
+`http://localhost:3001` and GraphQL is available at `http://localhost:3001/graphql`.
 
-| Script                            | What it does                                                             |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| `pnpm start:dev`                  | Run with hot reload                                                      |
-| `pnpm build`                      | Compile to `dist/`                                                       |
-| `pnpm lint` / `pnpm format:check` | Static checks                                                            |
-| `pnpm typecheck`                  | `tsc --noEmit`                                                           |
-| `pnpm test` / `pnpm test:cov`     | Unit tests                                                               |
-| `pnpm test:e2e`                   | e2e tests (spins up Postgres/Redis via Testcontainers — requires Docker) |
-| `pnpm graphql:generate`           | Regenerate `src/schema.gql` from resolver metadata (no services needed)  |
-| `pnpm graphql:check`              | Regenerate and fail if `src/schema.gql` is stale                         |
-| `pnpm db:generate`                | Generate a Prisma Client from the schema                                 |
-| `pnpm db:migrate`                 | Apply migrations                                                         |
-| `pnpm verify`                     | lint + typecheck + test:cov + build + graphql:check                      |
+To stop the infrastructure:
 
-## Scope decisions
+```bash
+pnpm docker:down
+```
 
-The task ships no login screen, so authentication was removed rather than half-built: every
-GraphQL operation is public. Anything deployed beyond a review environment needs an auth layer
-in front of the mutations first.
+## API documentation: GraphiQL instead of Swagger
 
-The only REST surface is `/health/*`; everything else is `/graphql`.
+This project does not use Swagger. Swagger/OpenAPI is intended primarily for REST APIs, while the
+application API is GraphQL. Its equivalent sources of documentation are:
 
-`publishedAt` travels as `MM/DD/YYYY HH:mm` and is interpreted as a UTC wall clock on both
-sides, so the value a user types is the value they read back regardless of their timezone.
+- **GraphiQL:** interactive documentation and request runner at
+  `http://localhost:3001/graphql` in development
+- **Generated schema:** [`src/schema.gql`](src/schema.gql)
 
-## Announcements
+GraphiQL is enabled by `GRAPHIQL_ENABLED=true` in the development environment and is disabled in
+production.
 
-`announcements` is the domain module: Prisma model → repository → service → GraphQL resolver.
+## Available endpoints
 
-| Operation                       | Kind         | Notes                                   |
-| ------------------------------- | ------------ | --------------------------------------- |
-| `announcements(pagination)`     | query        | Newest update first                     |
-| `announcement(id)`              | query        | Single announcement with its categories |
-| `categories`                    | query        | Seeded category list                    |
-| `createAnnouncement(input)`     | mutation     | `publishedAt` is `MM/DD/YYYY HH:mm`     |
-| `updateAnnouncement(id, input)` | mutation     |                                         |
-| `deleteAnnouncement(id)`        | mutation     | Soft delete                             |
-| `announcementChanged`           | subscription | Cache invalidation feed for the client  |
+| Method | Path            | Purpose                                            |
+| ------ | --------------- | -------------------------------------------------- |
+| `GET`  | `/graphql`      | GraphiQL interface in development                  |
+| `POST` | `/graphql`      | GraphQL queries and mutations                      |
+| `WS`   | `/graphql`      | Subscriptions using `graphql-transport-ws`         |
+| `GET`  | `/health/live`  | Process liveness                                   |
+| `GET`  | `/health/ready` | PostgreSQL and Redis readiness                     |
+| `GET`  | `/health`       | Database, Redis, queues, and process-memory health |
 
-## Notifications
+All GraphQL operations are public because the supplied task has no authentication flow.
 
-In-app notifications are pushed over the GraphQL subscription WebSocket. Three moments produce
-one `notifications` row each — the `(announcement, kind)` pair is unique, so a job retry
-re-emits instead of duplicating:
+### GraphQL operations
 
-| Kind        | Fires                                  |
-| ----------- | -------------------------------------- |
-| `created`   | Right after an announcement is created |
-| `upcoming`  | 30 minutes before `publishedAt`        |
-| `published` | At `publishedAt`                       |
+| Operation                       | Type         | Description                                      |
+| ------------------------------- | ------------ | ------------------------------------------------ |
+| `announcements(pagination)`     | Query        | Paginated and sorted announcement list           |
+| `announcement(id)`              | Query        | One announcement with its categories             |
+| `categories`                    | Query        | All seeded categories                            |
+| `notifications(limit)`          | Query        | Recent notifications and unread count            |
+| `createAnnouncement(input)`     | Mutation     | Create an announcement                           |
+| `updateAnnouncement(id, input)` | Mutation     | Replace announcement values and categories       |
+| `deleteAnnouncement(id)`        | Mutation     | Soft-delete an announcement                      |
+| `markNotificationsRead(ids)`    | Mutation     | Mark selected notifications, or all when omitted |
+| `announcementChanged`           | Subscription | Announcement create/update/delete events         |
+| `notificationCreated`           | Subscription | New in-app notifications                         |
 
-The two timed ones are BullMQ delayed jobs on the `notifications` queue with deterministic ids
-(`announcement-upcoming-<id>`), so moving the publication date reschedules them and deleting the
-announcement cancels them. The worker writes the row and an outbox event in one transaction; the
-outbox dispatcher publishes it to Redis, and every connected client receives it — the socket only
-ever announces committed rows.
+`publishedAt` mutation input uses `MM/DD/YYYY HH:mm` and is interpreted as a UTC wall-clock value.
 
-| Operation                    | Kind         | Notes                              |
-| ---------------------------- | ------------ | ---------------------------------- |
-| `notifications(limit)`       | query        | Recent feed + `unreadCount`        |
-| `markNotificationsRead(ids)` | mutation     | Omit `ids` to mark everything read |
-| `notificationCreated`        | subscription | Live push behind the bell menu     |
+## Testing manually with GraphiQL
 
-### Testing it
+GraphiQL is the preferred manual testing interface because it provides schema documentation,
+autocomplete, validation, variables, and subscription support in the browser.
 
-Open GraphiQL at `/graphql`, run the subscription in one tab:
+1. Start the backend using the local setup above.
+2. Open `http://localhost:3001/graphql`.
+3. Run this query to obtain valid category IDs:
 
 ```graphql
-subscription {
-  notificationCreated {
+query Categories {
+  categories {
     id
-    kind
-    title
-    publishedAt
+    name
+    slug
   }
 }
 ```
 
-then create an announcement in another tab. The `created` event arrives immediately; set
-`publishedAt` ~31 minutes ahead to watch `upcoming` and `published` land on schedule. From the
-CLI the same works over `wscat -c ws://localhost:3000/graphql -s graphql-transport-ws`.
+4. Copy a category ID and create an announcement. The publication time must be in the future:
 
-## Example module
+```graphql
+mutation CreateAnnouncement($input: CreateAnnouncementInput!) {
+  createAnnouncement(input: $input) {
+    id
+    title
+    content
+    publishedAt
+    categories {
+      id
+      name
+    }
+  }
+}
+```
 
-`announcements` demonstrates the full chain: Prisma model → repository → service → GraphQL
-resolver → e2e test hitting `/graphql`.
+Use the **Variables** panel:
+
+```json
+{
+  "input": {
+    "title": "Community cleanup",
+    "content": "Meet at the town hall at 09:00.",
+    "publishedAt": "08/25/2026 09:00",
+    "categoryIds": ["PASTE-A-CATEGORY-UUID-HERE"]
+  }
+}
+```
+
+5. List announcements:
+
+```graphql
+query Announcements($pagination: PaginationInput) {
+  announcements(pagination: $pagination) {
+    total
+    items {
+      id
+      title
+      content
+      publishedAt
+      updatedAt
+      categories {
+        id
+        name
+      }
+    }
+  }
+}
+```
+
+Variables:
+
+```json
+{
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "sortBy": "updatedAt",
+    "order": "desc"
+  }
+}
+```
+
+Supported `sortBy` values are `publishedAt`, `updatedAt`, `createdAt`, and `title`. The `order`
+value can be `asc` or `desc`.
+
+### Testing live notifications
+
+Open a second GraphiQL tab and start this subscription:
+
+```graphql
+subscription NotificationCreated {
+  notificationCreated {
+    id
+    announcementId
+    kind
+    title
+    publishedAt
+    createdAt
+  }
+}
+```
+
+Create an announcement in the first tab. A `created` notification should appear immediately in
+the subscription tab. The application also schedules an `upcoming` notification 30 minutes before
+publication and a `published` notification at the publication time.
+
+## Testing with Postman
+
+Postman can test the same GraphQL queries and mutations over HTTP:
+
+1. Create a new request and select `POST`.
+2. Use `http://localhost:3001/graphql` as the URL.
+3. Open **Body**, select **GraphQL**, and paste a query or mutation into the query field.
+4. Paste its JSON variables into the **GraphQL Variables** field.
+5. Send the request. No authorization header is required.
+
+For example, list the categories with:
+
+```graphql
+query Categories {
+  categories {
+    id
+    name
+    slug
+  }
+}
+```
+
+For a raw JSON request instead of Postman's GraphQL editor, set
+`Content-Type: application/json` and use:
+
+```json
+{
+  "query": "query Categories { categories { id name slug } }",
+  "variables": {}
+}
+```
+
+Use GraphiQL for subscriptions; its integrated client handles the GraphQL WebSocket protocol and
+is simpler than configuring subscription protocol messages manually in Postman.
+
+## Automated tests and quality checks
+
+```bash
+pnpm test
+pnpm test:e2e
+pnpm verify
+```
+
+- `pnpm test` runs unit tests.
+- `pnpm test:e2e` runs GraphQL and health tests with disposable PostgreSQL and Redis containers;
+  Docker must be running.
+- `pnpm verify` runs linting, type checking, unit tests with coverage, the production build, and a
+  generated-schema consistency check.
+
+## Useful commands
+
+| Command                 | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `pnpm start:dev`        | Start the backend with hot reload              |
+| `pnpm build`            | Compile the production application             |
+| `pnpm graphql:generate` | Regenerate `src/schema.gql`                    |
+| `pnpm graphql:check`    | Fail when the committed schema is stale        |
+| `pnpm db:migrate`       | Apply Prisma migrations                        |
+| `pnpm db:seed`          | Seed categories and a sample announcement      |
+| `pnpm db:studio`        | Open Prisma Studio                             |
+| `pnpm docker:up`        | Start local PostgreSQL and Redis               |
+| `pnpm docker:reset`     | Recreate local infrastructure and its data     |
+| `pnpm lint`             | Run ESLint                                     |
+| `pnpm typecheck`        | Run TypeScript checks without emitting files   |
+| `pnpm test:cov`         | Run unit tests with coverage                   |
+| `pnpm test:e2e`         | Run container-backed end-to-end tests          |
+| `pnpm verify`           | Run the complete non-Docker verification suite |
+
+## Architecture notes
+
+The announcement flow is organized as GraphQL resolver → service → repository → Prisma. Domain
+errors remain transport-independent and are converted to GraphQL errors with stable
+`extensions.code` values.
+
+Announcement mutations write an outbox event in the same database transaction as the domain
+change. A BullMQ worker publishes committed events through Redis, allowing every API instance to
+deliver consistent subscription updates. Scheduled notification jobs use deterministic IDs so
+updates can reschedule them and deletions can cancel them safely.
