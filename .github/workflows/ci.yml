@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:cov
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  e2e:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:e2e
+
+  graphql:
+    name: GraphQL schema contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Regenerate and diff schema.gql
+        run: |
+          pnpm graphql:generate
+          git diff --exit-code -- src/schema.gql \
+            || { echo "::error::src/schema.gql is stale. Run 'pnpm graphql:generate' and commit the result."; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graphql-schema
+          path: src/schema.gql
+          retention-days: 30
+
+  migrations:
+    name: Migration safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start ephemeral Postgres
+        run: docker run -d --name ci-postgres -e POSTGRES_USER=app -e POSTGRES_PASSWORD=app -e POSTGRES_DB=app -p 5432:5432 postgres:17-alpine
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            docker exec ci-postgres pg_isready -U app -d app && break
+            sleep 1
+          done
+
+      - name: Fail if the schema has ungenerated migrations
+        env:
+          DATABASE_URL: postgres://app:app@localhost:5432/app
+        run: |
+          pnpm exec prisma migrate diff \
+            --from-migrations ./prisma/migrations \
+            --to-schema-datamodel ./prisma/schema.prisma \
+            --shadow-database-url "$DATABASE_URL" \
+            --exit-code \
+            || { echo "::error::Schema changed without a migration. Run 'pnpm db:migrate' and commit the result."; exit 1; }
+
+      - name: Reject migrations that lock a table
+        run: |
+          set -euo pipefail
+          if git diff --name-only origin/main...HEAD -- prisma/migrations/ | grep -q '[.]sql$'; then
+            added=$(git diff origin/main...HEAD -- 'prisma/migrations/**/*.sql' | grep '^+' || true)
+            if echo "$added" | grep -i 'ADD COLUMN' | grep -i 'NOT NULL' | grep -qiv 'DEFAULT'; then
+              echo "::error::ADD COLUMN NOT NULL without a DEFAULT fails against a non-empty table."
+              exit 1
+            fi
+            if echo "$added" | grep -i 'CREATE .*INDEX' | grep -qiv 'CONCURRENTLY'; then
+              echo "::warning::CREATE INDEX without CONCURRENTLY blocks writes while the index builds."
+            fi
+          fi
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [lint, typecheck, test, e2e, graphql, migrations, build]
+    if: always()
+    steps:
+      - name: Fail if any job failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "All checks passed."
