@@ -1,0 +1,108 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type Announcement {
+  categories: [Category!]!
+  content: String!
+  createdAt: DateTime!
+  id: ID!
+  publishedAt: DateTime!
+  title: String!
+  updatedAt: DateTime!
+}
+
+type AnnouncementChanged {
+  announcementId: ID!
+  eventType: AnnouncementChangedEventType!
+  title: String
+}
+
+enum AnnouncementChangedEventType {
+  created
+  deleted
+  updated
+}
+
+type AnnouncementPage {
+  items: [Announcement!]!
+  total: Float!
+}
+
+type Category {
+  id: ID!
+  name: String!
+  slug: String!
+}
+
+input CreateAnnouncementInput {
+  categoryIds: [ID!]!
+  content: String!
+  publishedAt: String!
+  title: String!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type Mutation {
+  createAnnouncement(input: CreateAnnouncementInput!): Announcement!
+  deleteAnnouncement(id: ID!): Boolean!
+
+  """Marks the given notifications read, or all when omitted"""
+  markNotificationsRead(ids: [ID!]): Int!
+  updateAnnouncement(id: ID!, input: UpdateAnnouncementInput!): Announcement!
+}
+
+type Notification {
+  announcementId: ID!
+  createdAt: DateTime!
+  id: ID!
+  kind: NotificationKind!
+  publishedAt: DateTime!
+  readAt: DateTime
+  title: String!
+}
+
+type NotificationFeed {
+  items: [Notification!]!
+  unreadCount: Int!
+}
+
+enum NotificationKind {
+  created
+  published
+  upcoming
+}
+
+input PaginationInput {
+  limit: Int! = 20
+  order: String! = "desc"
+  page: Int! = 1
+  sortBy: String
+}
+
+type Query {
+  announcement(id: ID!): Announcement!
+
+  """Announcements page, newest update first"""
+  announcements(pagination: PaginationInput): AnnouncementPage!
+  categories: [Category!]!
+
+  """Recent notifications, newest first"""
+  notifications(limit: Int): NotificationFeed!
+}
+
+type Subscription {
+  announcementChanged: AnnouncementChanged!
+  notificationCreated: Notification!
+}
+
+input UpdateAnnouncementInput {
+  categoryIds: [ID!]!
+  content: String!
+  publishedAt: String!
+  title: String!
+}
