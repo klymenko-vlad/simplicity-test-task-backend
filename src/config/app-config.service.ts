@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { AppRole, Env } from './env.schema';
-import { parseTrustProxy } from './trust-proxy';
 
 interface HttpConfig {
   readonly port: number;
@@ -10,9 +9,7 @@ interface HttpConfig {
   readonly apiPrefix: string;
   readonly requestTimeoutMs: number;
   readonly shutdownDrainMs: number;
-  readonly bodyLimitBytes: number;
   readonly corsOrigins: true | string[];
-  readonly trustProxy: boolean | string | string[];
 }
 
 export interface DatabaseConfig {
@@ -74,9 +71,7 @@ export class AppConfigService {
       apiPrefix: this.config.get<string>('API_PREFIX'),
       requestTimeoutMs: this.config.get<number>('REQUEST_TIMEOUT_MS'),
       shutdownDrainMs: this.config.get<number>('SHUTDOWN_DRAIN_MS'),
-      bodyLimitBytes: this.config.get<number>('BODY_LIMIT_BYTES'),
       corsOrigins: this.parseOrigins(this.config.get<string>('CORS_ORIGINS')),
-      trustProxy: parseTrustProxy(this.config.get<string>('TRUSTED_PROXIES')),
     };
   }
 

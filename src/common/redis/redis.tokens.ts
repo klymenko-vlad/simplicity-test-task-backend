@@ -1,15 +1,18 @@
-import type { RedisOptions } from 'ioredis';
-
 import type { AppConfigService } from '../../config/app-config.service';
 
 export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
 
-export function redisOptions(config: AppConfigService): RedisOptions {
-  return {
-    host: config.redis.host,
-    port: config.redis.port,
-    password: config.redis.password,
-    db: config.redis.db,
-    tls: config.redis.tls ? {} : undefined,
-  };
+/** Structural, so it satisfies ioredis, mqemitter-redis and BullMQ alike. */
+export interface RedisConnectionOptions {
+  host: string;
+  port: number;
+  password: string | undefined;
+  db: number;
+  tls: Record<string, never> | undefined;
+}
+
+export function redisOptions(config: AppConfigService): RedisConnectionOptions {
+  const { host, port, password, db, tls } = config.redis;
+
+  return { host, port, password, db, tls: tls ? {} : undefined };
 }

@@ -4,6 +4,8 @@ import type Redis from 'ioredis';
 
 import { REDIS_CLIENT } from '../common/redis/redis.tokens';
 
+import { timedPing } from './timed-ping';
+
 @Injectable()
 export class RedisHealthIndicator {
   constructor(
@@ -11,28 +13,7 @@ export class RedisHealthIndicator {
     private readonly indicator: HealthIndicatorService,
   ) {}
 
-  async pingCheck(key: string, timeoutMs = 2_000) {
-    const check = this.indicator.check(key);
-    const startedAt = performance.now();
-
-    let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        reject(new Error(`redis ping exceeded ${timeoutMs}ms`));
-      }, timeoutMs);
-      timer.unref();
-    });
-
-    const ping = this.redis.ping();
-    ping.catch(() => undefined);
-
-    try {
-      await Promise.race([ping, timeout]);
-      return check.up({ responseTimeMs: Math.round(performance.now() - startedAt) });
-    } catch (error) {
-      return check.down({ message: (error as Error).message });
-    } finally {
-      clearTimeout(timer);
-    }
+  pingCheck<TKey extends string>(key: TKey, timeoutMs = 2_000) {
+    return timedPing(this.indicator, key, 'redis', timeoutMs, () => this.redis.ping());
   }
 }

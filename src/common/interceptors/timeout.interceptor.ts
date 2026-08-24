@@ -9,6 +9,8 @@ import { GqlExecutionContext } from '@nestjs/graphql';
 import { Observable, throwError, TimeoutError } from 'rxjs';
 import { catchError, timeout } from 'rxjs/operators';
 
+import { isGraphQLContext } from '../graphql/graphql-context';
+
 @Injectable()
 export class TimeoutInterceptor implements NestInterceptor {
   constructor(private readonly ms = 15_000) {}
@@ -27,7 +29,7 @@ export class TimeoutInterceptor implements NestInterceptor {
   }
 
   private isMutation(context: ExecutionContext): boolean {
-    if ((context.getType<'graphql'>() as string) !== 'graphql') return false;
+    if (!isGraphQLContext(context)) return false;
 
     const info = GqlExecutionContext.create(context).getInfo<{
       operation?: { operation?: string };

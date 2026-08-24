@@ -2,6 +2,7 @@ import { Global, Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import mqEmitterRedis from 'mqemitter-redis';
 
 import { AppConfigService } from '../../config/app-config.service';
+import { redisOptions } from '../redis/redis.tokens';
 
 import { MQ_EMITTER, type MqEmitter } from './pubsub.tokens';
 
@@ -11,14 +12,7 @@ import { MQ_EMITTER, type MqEmitter } from './pubsub.tokens';
     {
       provide: MQ_EMITTER,
       inject: [AppConfigService],
-      useFactory: (config: AppConfigService): MqEmitter =>
-        mqEmitterRedis({
-          port: config.redis.port,
-          host: config.redis.host,
-          password: config.redis.password,
-          db: config.redis.db,
-          tls: config.redis.tls ? {} : undefined,
-        }),
+      useFactory: (config: AppConfigService): MqEmitter => mqEmitterRedis(redisOptions(config)),
     },
   ],
   exports: [MQ_EMITTER],

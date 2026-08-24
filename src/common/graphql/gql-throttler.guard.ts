@@ -2,13 +2,15 @@ import { Injectable, type ExecutionContext } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
+import { isGraphQLContext } from './graphql-context';
+
 @Injectable()
 export class GqlThrottlerGuard extends ThrottlerGuard {
   override getRequestResponse(context: ExecutionContext): {
     req: Record<string, unknown>;
     res: Record<string, unknown>;
   } {
-    if ((context.getType<'graphql'>() as string) === 'graphql') {
+    if (isGraphQLContext(context)) {
       const gqlContext = GqlExecutionContext.create(context).getContext<{
         req?: Record<string, unknown>;
         request?: Record<string, unknown>;

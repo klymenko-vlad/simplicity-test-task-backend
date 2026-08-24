@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Global, Module } from '@nestjs/common';
 import type { DynamicModule } from '@nestjs/common';
 
+import { redisOptions } from '../common/redis/redis.tokens';
 import { AppConfigService } from '../config/app-config.service';
 import { AnnouncementsModule } from '../modules/announcements/announcements.module';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
@@ -21,14 +22,7 @@ export class QueueModule {
         BullModule.forRootAsync({
           inject: [AppConfigService],
           useFactory: (config: AppConfigService) => ({
-            connection: {
-              host: config.redis.host,
-              port: config.redis.port,
-              password: config.redis.password,
-              db: config.redis.db,
-              tls: config.redis.tls ? {} : undefined,
-              maxRetriesPerRequest: null,
-            },
+            connection: { ...redisOptions(config), maxRetriesPerRequest: null },
             prefix: `{${config.queue.prefix}}`,
             defaultJobOptions: {
               attempts: config.queue.defaultAttempts,

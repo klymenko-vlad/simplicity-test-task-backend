@@ -13,6 +13,8 @@ import { PinoLogger } from 'nestjs-pino';
 import { isPrismaError } from '../../database/repository/database-error';
 import { DomainError, type DomainErrorKind } from '../errors/domain.error';
 
+import { isGraphQLContext } from './graphql-context';
+
 const HTTP_STATUS_CODE: Record<number, string> = {
   [HttpStatus.BAD_REQUEST]: 'BAD_USER_INPUT',
   [HttpStatus.UNAUTHORIZED]: 'UNAUTHENTICATED',
@@ -90,7 +92,7 @@ export class GqlExceptionFilter implements ExceptionFilter, GqlFilterMarker {
       this.logger.debug(payload, 'request failed');
     }
 
-    if ((host.getType<'graphql'>() as string) === 'graphql') {
+    if (isGraphQLContext(host)) {
       return new GraphQLError(message, {
         extensions: { code, ...(details ? { details } : {}) },
       });
