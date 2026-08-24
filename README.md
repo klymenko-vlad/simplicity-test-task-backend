@@ -63,7 +63,7 @@ This project does not use Swagger. Swagger/OpenAPI is intended primarily for RES
 application API is GraphQL. Its equivalent sources of documentation are:
 
 - **GraphiQL:** interactive documentation and request runner at
-  `http://localhost:3001/graphql` in development
+  `http://localhost:3001/graphiql` in development
 - **Generated schema:** [`src/schema.gql`](src/schema.gql)
 
 GraphiQL is enabled by `GRAPHIQL_ENABLED=true` in the development environment and is disabled in
@@ -73,7 +73,7 @@ production.
 
 | Method | Path            | Purpose                                            |
 | ------ | --------------- | -------------------------------------------------- |
-| `GET`  | `/graphql`      | GraphiQL interface in development                  |
+| `GET`  | `/graphiql`     | GraphiQL interface in development                  |
 | `POST` | `/graphql`      | GraphQL queries and mutations                      |
 | `WS`   | `/graphql`      | Subscriptions using `graphql-transport-ws`         |
 | `GET`  | `/health/live`  | Process liveness                                   |
@@ -105,7 +105,7 @@ GraphiQL is the preferred manual testing interface because it provides schema do
 autocomplete, validation, variables, and subscription support in the browser.
 
 1. Start the backend using the local setup above.
-2. Open `http://localhost:3001/graphql`.
+2. Open `http://localhost:3001/graphiql`.
 3. Run this query to obtain valid category IDs:
 
 ```graphql
